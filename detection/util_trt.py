@@ -34,17 +34,20 @@ def get_engine(max_batch_size=1, onnx_file_path="", engine_file_path="",\
                             Please check if the ONNX model is compatible '
             print('Completed parsing of ONNX file')
             print('Building an engine from file {}; this may take a while...'.format(onnx_file_path))        
-            
+            builder_config = builder.create_builder_config()
             # build trt engine
-            builder.max_batch_size = max_batch_size
-            builder.max_workspace_size = 1 << 30 # 1GB
-            builder.fp16_mode = fp16_mode
-            if int8_mode:
-                builder.int8_mode = int8_mode
+            # builder_config.max_batch_size = max_batch_size
+            builder_config.max_workspace_size = 1 << 30 # 1GB
+            # builder_config.fp16_mode = fp16_mode
+            if fp16_mode and builder.platform_has_fast_fp16:
+                builder_config.set_flag(trt.BuilderFlag.FP16)
+            elif int8_mode and builder.platform_has_fast_int8:
+                # builder_config.int8_mode = int8_mode
+                builder_config.set_flag(trt.BuilderFlag.INT8)
                 assert calibration_stream, 'Error: a calibration_stream should be provided for int8 mode'
-                builder.int8_calibrator  = Calibrator(calibration_stream, calibration_table_path)
+                builder_config.int8_calibrator  = Calibrator(calibration_stream, calibration_table_path)
                 print('Int8 mode enabled')
-            engine = builder.build_cuda_engine(network) 
+            engine = builder.build_engine(network, builder_config) 
             if engine is None:
                 print('Failed to create the engine')
                 return None   
